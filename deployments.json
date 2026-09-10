@@ -1,0 +1,25 @@
+{
+  "chain": {
+    "name": "Robinhood Chain",
+    "chainId": 4663,
+    "rpcUrl": "https://rpc.mainnet.chain.robinhood.com",
+    "explorer": "https://robinhoodchain.blockscout.com",
+    "gasToken": "ETH"
+  },
+  "contracts": {
+    "StockpadV4Factory": {
+      "current": "0x309E552113553D99d05801C31230FBd67e50F570",
+      "legacy": [
+        "0x3a97D922C3B9188Ae34A0D2913f7c7A37792f8f3",
+        "0xBBB05533093D09730D1CC91f98f5d92a3B8c4406"
+      ]
+    }
+  },
+  "peripherals": {
+    "uniswapV4PoolManager": "0x8366a39cc670b4001a1121b8f6a443a643e40951",
+    "uniswapV4StateView": "0xf3334192d15450cdd385c8b70e03f9a6bd9e673b",
+    "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "usdg": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"
+  },
+  "notes": "The current product is StockpadV4Factory. USDG uses 6 decimals; WETH and stock tokens use 18. Liquidity is locked at launch. Addresses are on Robinhood Chain (4663)."
+}
