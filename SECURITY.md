@@ -5,7 +5,7 @@
 If you discover a security issue in the Stockpad contracts, please report it
 **privately** first — do not open a public issue for an unpatched vulnerability.
 
-- Open a [GitHub security advisory](https://github.com/garfieldsolanacto-hash/stockpad-contracts/security/advisories/new), or
+- Open a [GitHub security advisory](https://github.com/stockpaddev/stockpad-contracts/security/advisories/new), or
 - Reach out via the project's X / Twitter DMs.
 
 Please include a clear description, affected contract(s), and a proof-of-concept
