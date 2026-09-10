@@ -78,7 +78,6 @@ Robinhood Chain · chain ID `4663` · gas token `ETH`. Full machine-readable lis
 │   └── uniswap/                   # Uniswap V3 / V4 interfaces
 ├── abi/                           # extracted ABIs (Factory, Token, Locker, Swapper)
 ├── test/                          # Hardhat test suite
-├── scripts/                       # deploy / registry helper scripts
 ├── deployments.json               # chain + contract addresses
 ├── hardhat.config.js
 ├── SECURITY.md
