@@ -16,6 +16,19 @@ interface IDivToken4 {
     function dividendSupply() external view returns (uint256);
 }
 
+// Uniswap V3 SwapRouter02 (exact-input, multi-hop via encoded path). Used ONLY for the optional
+// atomic dev buy on stock/USDG-paired launches: ETH -> pair asset before the V4 pair -> token hop.
+interface ISwapRouterV3 {
+    struct ExactInputParams { bytes path; address recipient; uint256 amountIn; uint256 amountOutMinimum; }
+    function exactInput(ExactInputParams calldata params) external payable returns (uint256 amountOut);
+}
+
+// Our own V4 swapper (defined below) — used by the locker to convert token-side fees into the pair
+// asset, so creators/holders receive the FULL fee value in the pair (FLY/ETH/USDG), never meme tokens.
+interface ISwapper4 {
+    function swapExactIn(PoolKey calldata key, bool zeroForOne, uint256 amountIn, uint256 minOut, address to) external payable returns (uint256);
+}
+
 /// @title V4Locker
 /// @notice Owns a launch's Uniswap V4 liquidity position INSIDE the singleton PoolManager (there is
 ///         no NFT — the position is keyed by this contract's address and is never withdrawn, so the
@@ -37,9 +50,10 @@ contract V4Locker is IUnlockCallback, ReentrancyGuard {
         PoolKey key; int24 tickLower; int24 tickUpper;
     }
     mapping(uint256 => Pos) public positions;
-    // creator's claimable balances (accrued when holder-sharing is OFF)
+    // creator's claimable balance (in the PAIR asset), accrued when holder-sharing is OFF
     mapping(uint256 => uint256) public creatorOwedPair;
-    mapping(uint256 => uint256) public creatorOwedToken;
+    mapping(uint256 => uint256) public creatorOwedToken; // retained for ABI compatibility; always 0 now
+    address public swapper; // set once by the factory; used to convert token-side fees into the pair asset
 
     uint8 private constant OP_PROVIDE = 1;
     uint8 private constant OP_COLLECT = 2;
@@ -63,6 +77,9 @@ contract V4Locker is IUnlockCallback, ReentrancyGuard {
         pm.unlock(abi.encode(OP_PROVIDE, id, int256(uint256(liquidity))));
     }
 
+    // One-time wiring from the factory (the swapper is deployed alongside this locker).
+    function setSwapper(address s) external { if (msg.sender != factory) revert NotFactory(); require(swapper == address(0), "set"); swapper = s; }
+
     /// Permissionless "Distribute": pull the pool's accrued swap fees and split them.
     /// Protocol share -> Stockpad dev wallet in ETH. The remainder goes ENTIRELY to holders when
     /// holder-sharing was enabled at launch, otherwise it is held for the creator to CLAIM.
@@ -71,6 +88,18 @@ contract V4Locker is IUnlockCallback, ReentrancyGuard {
         require(p.token != address(0), "unknown");
         bytes memory ret = pm.unlock(abi.encode(OP_COLLECT, id, int256(0)));
         (uint256 pairFees, uint256 tokenFees) = abi.decode(ret, (uint256, uint256));
+
+        // Convert the token-side (meme) fees into the PAIR asset so creators/holders receive the FULL
+        // fee value in the pair (FLY/ETH/USDG) — never meme tokens. Sold back through the same pool.
+        if (tokenFees > 0 && swapper != address(0)) {
+            IERC20(p.token).forceApprove(swapper, tokenFees);
+            bool zeroForOne = (p.key.currency0 == p.token); // selling the meme token: input is the token side
+            try ISwapper4(swapper).swapExactIn(p.key, zeroForOne, tokenFees, 0, address(this)) returns (uint256 got) {
+                // when the pair is WETH the swapper returns native ETH — re-wrap so pairFees stays in WETH units
+                if (p.pair == weth) { IWETH9(weth).deposit{value: got}(); }
+                pairFees += got;
+            } catch { /* if the swap can't route, leave token fees for a later collect */ }
+        }
 
         uint256 toProtocol = (pairFees * PROTOCOL_BPS) / 10000;
         uint256 rest = pairFees - toProtocol;
@@ -83,10 +112,8 @@ contract V4Locker is IUnlockCallback, ReentrancyGuard {
         }
         if (rest > 0) {
             if (toHolders) { IERC20(p.pair).forceApprove(p.token, rest); IDivToken4(p.token).distributeReward(rest); }
-            else creatorOwedPair[id] += rest;               // creator claims later — PAIR ASSET ONLY
+            else creatorOwedPair[id] += rest;               // creator claims later — all in the PAIR asset
         }
-        // NOTE: token-side (meme) fees are NOT paid to the creator (they wanted pair-asset only).
-        // They simply stay locked in this contract. tokenFees is left untouched.
 
         emit FeesDistributed(id, pairFees, tokenFees, toHolders ? 0 : rest, toHolders ? rest : 0, toProtocol);
     }
@@ -217,13 +244,18 @@ contract StockpadV4Factory is Ownable2Step {
     StockpadV4Swapper public immutable swapper;
     uint256 public launchFee;          // one-time ETH fee per launch (owner-settable), forwarded to protocol
     address public immutable protocolRecipient;
+    address public immutable v3Router;  // Uniswap V3 SwapRouter02 (for the ETH->pair leg of a stock/USDG dev buy)
 
     struct Launch { address token; bytes32 poolId; address creator; string stock; bool holderRewards; address pairToken; uint24 fee; }
     Launch[] public launches;
-    // per-launch logo URL (e.g. an IPFS link). Stored separately so allLaunches()'s tuple stays
-    // unchanged and older readers keep decoding. Read with logoURI(id) or logoOf(token).
+    // per-launch metadata (logo + socials). Stored separately so allLaunches()'s tuple stays
+    // unchanged and older readers keep decoding. Read with logoURI(id)/logoOf(token), website*/twitter*.
     mapping(uint256 => string) public logoURI;
     mapping(address => string) public logoOf;
+    mapping(uint256 => string) public website;
+    mapping(address => string) public websiteOf;
+    mapping(uint256 => string) public twitter;   // X / Twitter URL or handle
+    mapping(address => string) public twitterOf;
 
     // caller-supplied off-chain math (ticks/liquidity/price for a single-sided token position)
     struct LaunchParams {
@@ -236,14 +268,22 @@ contract StockpadV4Factory is Ownable2Step {
         uint128 liquidity; uint160 sqrtPriceX96;
         bytes32 salt;           // CREATE2 salt so the frontend can predict token<->pair ordering
         string logoURI;         // logo URL (IPFS/https) shown across the site for everyone
+        string website;         // project website (stored on-chain, emitted for indexers)
+        string twitter;         // X / Twitter (stored on-chain, emitted for indexers)
+        // Optional atomic dev buy: the creator's first buy, executed in THIS tx.
+        // devBuy amount = msg.value - launchFee. For a WETH pair leave devBuyPath empty (ETH buys directly);
+        // for a stock/USDG pair, devBuyPath is the V3 exact-input path ETH(WETH)->...->pairToken.
+        bytes devBuyPath;
     }
 
-    event TokenCreated(uint256 indexed id, address indexed token, bytes32 indexed poolId, address creator, string name, string symbol, string stock, bool holderRewards, address pairToken, uint24 fee, string logoURI);
+    event TokenCreated(uint256 indexed id, address indexed token, bytes32 indexed poolId, address creator, string name, string symbol, string stock, bool holderRewards, address pairToken, uint24 fee, string logoURI, string website, string twitter);
+    event DevBuy(uint256 indexed id, address indexed creator, uint256 ethIn, uint256 tokensOut);
 
-    constructor(address owner_, address pm_, address weth_, address protocolRecipient_, uint256 launchFee_) Ownable(owner_) {
-        pm = IPoolManager(pm_); weth = weth_; protocolRecipient = protocolRecipient_; launchFee = launchFee_;
+    constructor(address owner_, address pm_, address weth_, address protocolRecipient_, uint256 launchFee_, address v3Router_) Ownable(owner_) {
+        pm = IPoolManager(pm_); weth = weth_; protocolRecipient = protocolRecipient_; launchFee = launchFee_; v3Router = v3Router_;
         locker = new V4Locker(pm_, address(this), protocolRecipient_, weth_);
         swapper = new StockpadV4Swapper(pm_, weth_);
+        locker.setSwapper(address(swapper)); // lets the locker convert token-side fees into the pair asset
     }
 
     function setLaunchFee(uint256 f) external onlyOwner { launchFee = f; }
@@ -276,11 +316,37 @@ contract StockpadV4Factory is Ownable2Step {
         uint256 id = launches.length;
         launches.push(Launch(tokenAddr, poolId, creator, pr.stock, pr.holderRewards, pair, pr.fee));
         if (bytes(pr.logoURI).length > 0) { logoURI[id] = pr.logoURI; logoOf[tokenAddr] = pr.logoURI; }
-        emit TokenCreated(id, tokenAddr, poolId, creator, pr.name, pr.symbol, pr.stock, pr.holderRewards, pair, pr.fee, pr.logoURI);
+        if (bytes(pr.website).length > 0) { website[id] = pr.website; websiteOf[tokenAddr] = pr.website; }
+        if (bytes(pr.twitter).length > 0) { twitter[id] = pr.twitter; twitterOf[tokenAddr] = pr.twitter; }
+        emit TokenCreated(id, tokenAddr, poolId, creator, pr.name, pr.symbol, pr.stock, pr.holderRewards, pair, pr.fee, pr.logoURI, pr.website, pr.twitter);
 
+        // forward the one-time launch fee to the protocol
         if (launchFee > 0) { (bool ok, ) = protocolRecipient.call{value: launchFee}(""); require(ok, "fee send"); }
-        uint256 refund = msg.value - launchFee;
-        if (refund > 0) { (bool ok2, ) = msg.sender.call{value: refund}(""); require(ok2, "refund"); }
+
+        // optional ATOMIC dev buy — the creator's first buy in this same tx (snipe-proof)
+        uint256 devBuy = msg.value - launchFee;
+        if (devBuy > 0) {
+            _devBuy(id, key, pair, creator, devBuy, pr.devBuyPath);
+        }
+    }
+
+    // Executes the creator's first buy with `ethIn` wei, sending the bought tokens to `creator`.
+    // WETH pair: ETH -> token directly via our V4 swapper. Stock/USDG pair: ETH -> pair via V3
+    // (using the caller-supplied path) then pair -> token via our V4 swapper.
+    function _devBuy(uint256 id, PoolKey memory key, address pair, address creator, uint256 ethIn, bytes memory path) internal {
+        bool zeroForOne = (key.currency0 == pair); // buying the token: input is the pair side
+        uint256 out;
+        if (pair == weth) {
+            out = swapper.swapExactIn{value: ethIn}(key, zeroForOne, ethIn, 0, creator);
+        } else {
+            require(path.length > 0, "devbuy path");
+            uint256 gotPair = ISwapRouterV3(v3Router).exactInput{value: ethIn}(
+                ISwapRouterV3.ExactInputParams({ path: path, recipient: address(this), amountIn: ethIn, amountOutMinimum: 0 })
+            );
+            IERC20(pair).forceApprove(address(swapper), gotPair);
+            out = swapper.swapExactIn(key, zeroForOne, gotPair, 0, creator);
+        }
+        emit DevBuy(id, creator, ethIn, out);
     }
 
     function launchCount() external view returns (uint256) { return launches.length; }
