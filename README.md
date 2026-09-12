@@ -47,6 +47,7 @@ Robinhood Chain · chain ID `4663` · gas token `ETH`. Full machine-readable lis
 | StockpadV4Factory (legacy) | `0x3a97D922C3B9188Ae34A0D2913f7c7A37792f8f3` |
 | StockpadV4Factory (legacy) | `0xBBB05533093D09730D1CC91f98f5d92a3B8c4406` |
 | Uniswap V4 PoolManager | `0x8366a39cc670b4001a1121b8f6a443a643e40951` |
+| **$SPAD** (Stockpad token) | [`0x9179b7b6943fd727fb5c72e079bc150d74eb356c`](https://robinhoodchain.blockscout.com/address/0x9179b7b6943fd727fb5c72e079bc150d74eb356c) |
 
 ## How a launch works
 

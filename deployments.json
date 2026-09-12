@@ -26,5 +26,8 @@
     "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
     "usdg": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"
   },
+  "token": {
+    "SPAD": "0x9179b7b6943fd727fb5c72e079bc150d74eb356c"
+  },
   "notes": "The current product is StockpadV4Factory (auto-collect + auto-push-to-holders on every ordinary token transfer, on any platform, no bot required + buyback-and-burn, also auto-triggered by ordinary transfers + atomic dev buy + on-chain logo/website/X). Reward mode per launch: holders, creator, or buyback-and-burn (fees buy the coin from its own pool and send it to 0x…dEaD). Creator-mode payouts remain a manual claim by design. USDG uses 6 decimals; WETH and stock tokens use 18. Liquidity is locked at launch. Addresses are on Robinhood Chain (4663)."
 }
