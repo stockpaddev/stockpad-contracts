@@ -39,9 +39,10 @@ Robinhood Chain · chain ID `4663` · gas token `ETH`. Full machine-readable lis
 
 | Contract | Address |
 | --- | --- |
-| **StockpadV4Factory** (current) | [`0x0C9720B8684C6E178d3cD7f73a5db21613e21C20`](https://robinhoodchain.blockscout.com/address/0x0C9720B8684C6E178d3cD7f73a5db21613e21C20) |
-| V4Locker (current) | `0x2EC332DF5694aD2D237B16A0f444C68866F2Ff49` |
-| StockpadV4Swapper (current) | `0xd9bD146d300BF03c05aC13d5FB2AC333D3A9D4b2` |
+| **StockpadV4Factory** (current) | [`0x2c4970DB51fecf700F91541F9A1074af97d5F8E9`](https://robinhoodchain.blockscout.com/address/0x2c4970DB51fecf700F91541F9A1074af97d5F8E9) |
+| V4Locker (current) | `0xCab34063Fa47703ad8938Dc3faA25C945AafADc1` |
+| StockpadV4Swapper (current) | `0x9C2aB1FFf9B7922bAc2088DfCe7Cf83f75567DAb` |
+| StockpadV4Factory (legacy) | `0x0C9720B8684C6E178d3cD7f73a5db21613e21C20` |
 | StockpadV4Factory (legacy) | `0x309E552113553D99d05801C31230FBd67e50F570` |
 | StockpadV4Factory (legacy) | `0x3a97D922C3B9188Ae34A0D2913f7c7A37792f8f3` |
 | StockpadV4Factory (legacy) | `0xBBB05533093D09730D1CC91f98f5d92a3B8c4406` |
@@ -57,7 +58,7 @@ Robinhood Chain · chain ID `4663` · gas token `ETH`. Full machine-readable lis
    - **Creator** — accrues to the creator to claim, in the pair asset.
    - **Buyback &amp; burn** — used to buy the coin from its own pool and send it to `0x…dEaD` (deflationary; no holder/creator payout).
    Holders and creators only ever receive the pair asset — never the meme token (token-side fees are auto-converted).
-5. Creators claim their fees, and holders claim their dividends, from the app dashboard.
+5. **Holders and buyback-and-burn are fully automatic — no bot, no button.** `StockpadTokenDividend`'s transfer hook periodically sweeps pool fees (collect → distribute/burn) and pays out a few holders directly on every ordinary transfer, triggered by trading on **any** platform, not just the Stockpad app. Creators still claim their fees manually from the app dashboard, by design.
 
 ```
  create ──▶ fixed-supply ERC-20 ──▶ live Uniswap V4 pool ──▶ liquidity locked

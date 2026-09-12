@@ -337,6 +337,8 @@ contract StockpadV4Factory is Ownable2Step {
 
         // holders aren't the pool/PM; exclude them from dividend accounting
         tok.setCurve(address(locker));
+        tok.setLaunchId(launches.length); // same id used below for locker.provide(...) — needed so the
+                                           // token's own transfer hook can call locker.collectFees(id)
         tok.setExcluded(address(pm), true);
         tok.setExcluded(address(locker), true);
         if (pr.burn) tok.setExcluded(DEAD_ADDR, true); // burned tokens must not accrue dividends
