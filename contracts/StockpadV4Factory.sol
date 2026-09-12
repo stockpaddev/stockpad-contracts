@@ -47,8 +47,10 @@ contract V4Locker is IUnlockCallback, ReentrancyGuard {
 
     struct Pos {
         address token; address pair; address creator; bool holderRewards; uint16 holderShareBps;
-        PoolKey key; int24 tickLower; int24 tickUpper;
+        PoolKey key; int24 tickLower; int24 tickUpper; bool burn;
     }
+    // burn sink — tokens sent here are unspendable (no key), i.e. permanently removed from circulation
+    address public constant DEAD = 0x000000000000000000000000000000000000dEaD;
     mapping(uint256 => Pos) public positions;
     // creator's claimable balance (in the PAIR asset), accrued when holder-sharing is OFF
     mapping(uint256 => uint256) public creatorOwedPair;
@@ -60,6 +62,7 @@ contract V4Locker is IUnlockCallback, ReentrancyGuard {
 
     event FeesDistributed(uint256 indexed id, uint256 pairFees, uint256 tokenFees, uint256 toCreator, uint256 toHolders, uint256 toProtocol);
     event CreatorClaimed(uint256 indexed id, uint256 pairAmount, uint256 tokenAmount);
+    event FeesBurned(uint256 indexed id, uint256 pairSpent, uint256 tokensBoughtBurned, uint256 tokenFeesBurned, uint256 toProtocol);
     error NotFactory();
     error NotPoolManager();
     error NotSingleSided();
@@ -88,6 +91,29 @@ contract V4Locker is IUnlockCallback, ReentrancyGuard {
         require(p.token != address(0), "unknown");
         bytes memory ret = pm.unlock(abi.encode(OP_COLLECT, id, int256(0)));
         (uint256 pairFees, uint256 tokenFees) = abi.decode(ret, (uint256, uint256));
+
+        // BURN MODE (buyback-and-burn): protocol keeps its 20% (ETH), the rest of the pair-side fees are
+        // used to BUY the meme token from this very pool and are sent to the dead address, and the
+        // token-side fees are burned directly. Net effect: continuous deflation + buy pressure. No
+        // holder dividends and no creator income in this mode.
+        if (p.burn) {
+            uint256 toProtocolB = (pairFees * PROTOCOL_BPS) / 10000;
+            uint256 restB = pairFees - toProtocolB;
+            if (toProtocolB > 0) {
+                if (p.pair == weth) { IWETH9(weth).withdraw(toProtocolB); (bool ok, ) = protocolRecipient.call{value: toProtocolB}(""); require(ok, "eth"); }
+                else IERC20(p.pair).safeTransfer(protocolRecipient, toProtocolB);
+            }
+            uint256 bought;
+            if (restB > 0 && swapper != address(0)) {
+                bool payWithPair = (p.key.currency0 == p.pair); // buying the meme: input is the pair side
+                IERC20(p.pair).forceApprove(swapper, restB);
+                try ISwapper4(swapper).swapExactIn(p.key, payWithPair, restB, 0, DEAD) returns (uint256 got) { bought = got; }
+                catch { IERC20(p.pair).forceApprove(swapper, 0); restB = 0; } // couldn't route — leave for a later collect
+            }
+            if (tokenFees > 0) IERC20(p.token).safeTransfer(DEAD, tokenFees);
+            emit FeesBurned(id, restB, bought, tokenFees, toProtocolB);
+            return;
+        }
 
         // Convert the token-side (meme) fees into the PAIR asset so creators/holders receive the FULL
         // fee value in the pair (FLY/ETH/USDG) — never meme tokens. Sold back through the same pool.
@@ -238,6 +264,7 @@ contract StockpadV4Factory is Ownable2Step {
     using SafeERC20 for IERC20;
 
     uint256 public constant TOTAL_SUPPLY = 1_000_000_000 ether;
+    address public constant DEAD_ADDR = 0x000000000000000000000000000000000000dEaD;
     IPoolManager public immutable pm;
     address public immutable weth;
     V4Locker public immutable locker;
@@ -256,6 +283,9 @@ contract StockpadV4Factory is Ownable2Step {
     mapping(address => string) public websiteOf;
     mapping(uint256 => string) public twitter;   // X / Twitter URL or handle
     mapping(address => string) public twitterOf;
+    // buyback-and-burn mode flag (kept OUT of the Launch tuple so allLaunches() stays ABI-compatible)
+    mapping(uint256 => bool) public burnMode;
+    mapping(address => bool) public burnOf;
 
     // caller-supplied off-chain math (ticks/liquidity/price for a single-sided token position)
     struct LaunchParams {
@@ -263,6 +293,7 @@ contract StockpadV4Factory is Ownable2Step {
         address pairToken;      // 0 = WETH (ETH)
         address creatorTo;      // 0 = msg.sender
         bool holderRewards; uint16 holderShareBps;
+        bool burn;              // true = buyback-and-burn mode (fees buy the meme & are burned; overrides holderRewards)
         uint24 fee;             // pips, e.g. 20000 = 2%
         int24 tickSpacing; int24 tickLower; int24 tickUpper;
         uint128 liquidity; uint160 sqrtPriceX96;
@@ -308,13 +339,15 @@ contract StockpadV4Factory is Ownable2Step {
         tok.setCurve(address(locker));
         tok.setExcluded(address(pm), true);
         tok.setExcluded(address(locker), true);
+        if (pr.burn) tok.setExcluded(DEAD_ADDR, true); // burned tokens must not accrue dividends
 
         // fund the locker with the whole supply, then it adds the single-sided position (and locks it)
         IERC20(tokenAddr).safeTransfer(address(locker), TOTAL_SUPPLY);
-        locker.provide(launches.length, V4Locker.Pos(tokenAddr, pair, creator, pr.holderRewards, pr.holderShareBps, key, pr.tickLower, pr.tickUpper), pr.liquidity);
+        locker.provide(launches.length, V4Locker.Pos(tokenAddr, pair, creator, pr.holderRewards, pr.holderShareBps, key, pr.tickLower, pr.tickUpper, pr.burn), pr.liquidity);
 
         uint256 id = launches.length;
         launches.push(Launch(tokenAddr, poolId, creator, pr.stock, pr.holderRewards, pair, pr.fee));
+        if (pr.burn) { burnMode[id] = true; burnOf[tokenAddr] = true; }
         if (bytes(pr.logoURI).length > 0) { logoURI[id] = pr.logoURI; logoOf[tokenAddr] = pr.logoURI; }
         if (bytes(pr.website).length > 0) { website[id] = pr.website; websiteOf[tokenAddr] = pr.website; }
         if (bytes(pr.twitter).length > 0) { twitter[id] = pr.twitter; twitterOf[tokenAddr] = pr.twitter; }

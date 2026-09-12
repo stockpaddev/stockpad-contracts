@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  Official repository for the <a href="https://stockpadrh-app-live.netlify.app">Stockpad</a> launchpad smart contracts on the <b>Robinhood Chain</b> (EVM, chain ID <code>4663</code>).
+  Official repository for the <a href="https://getstockpad.com">Stockpad</a> launchpad smart contracts on the <b>Robinhood Chain</b> (EVM, chain ID <code>4663</code>).
 </p>
 
 ---
@@ -39,7 +39,10 @@ Robinhood Chain · chain ID `4663` · gas token `ETH`. Full machine-readable lis
 
 | Contract | Address |
 | --- | --- |
-| **StockpadV4Factory** (current) | [`0x309E552113553D99d05801C31230FBd67e50F570`](https://robinhoodchain.blockscout.com/address/0x309E552113553D99d05801C31230FBd67e50F570) |
+| **StockpadV4Factory** (current) | [`0x0C9720B8684C6E178d3cD7f73a5db21613e21C20`](https://robinhoodchain.blockscout.com/address/0x0C9720B8684C6E178d3cD7f73a5db21613e21C20) |
+| V4Locker (current) | `0x2EC332DF5694aD2D237B16A0f444C68866F2Ff49` |
+| StockpadV4Swapper (current) | `0xd9bD146d300BF03c05aC13d5FB2AC333D3A9D4b2` |
+| StockpadV4Factory (legacy) | `0x309E552113553D99d05801C31230FBd67e50F570` |
 | StockpadV4Factory (legacy) | `0x3a97D922C3B9188Ae34A0D2913f7c7A37792f8f3` |
 | StockpadV4Factory (legacy) | `0xBBB05533093D09730D1CC91f98f5d92a3B8c4406` |
 | Uniswap V4 PoolManager | `0x8366a39cc670b4001a1121b8f6a443a643e40951` |
@@ -49,7 +52,11 @@ Robinhood Chain · chain ID `4663` · gas token `ETH`. Full machine-readable lis
 1. The factory mints a fixed-supply ERC-20 (`StockpadToken`).
 2. It creates a real Uniswap V4 pool paired with the chosen asset (stock token / ETH / USDG) and seeds one-sided liquidity.
 3. Liquidity is locked in `Locker` at launch — there is no withdrawal path.
-4. Each in-app trade takes a small fee in the pair asset; a share goes to holders (via `StockpadTokenDividend`) and/or the creator, the rest to the protocol fee escrow.
+4. Each in-app trade takes a small fee (default 2%). 20% is protocol/dev revenue (in ETH); the remaining 80% follows the launch's **reward mode**:
+   - **Holders** — distributed pro-rata to holders (via `StockpadTokenDividend`), in the pair asset.
+   - **Creator** — accrues to the creator to claim, in the pair asset.
+   - **Buyback &amp; burn** — used to buy the coin from its own pool and send it to `0x…dEaD` (deflationary; no holder/creator payout).
+   Holders and creators only ever receive the pair asset — never the meme token (token-side fees are auto-converted).
 5. Creators claim their fees, and holders claim their dividends, from the app dashboard.
 
 ```
@@ -127,6 +134,6 @@ MIT (see [`LICENSE`](LICENSE)), unless a file header states otherwise. Files der
 
 ## Links
 
-- **App:** https://stockpadrh-app-live.netlify.app
-- **Docs:** https://stockpadrh-app-live.netlify.app/docs
+- **App:** https://getstockpad.com
+- **Docs:** https://getstockpad.com/docs
 - **Explorer:** https://robinhoodchain.blockscout.com

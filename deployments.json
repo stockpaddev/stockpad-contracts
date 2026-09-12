@@ -6,10 +6,14 @@
     "explorer": "https://robinhoodchain.blockscout.com",
     "gasToken": "ETH"
   },
+  "site": "https://getstockpad.com",
   "contracts": {
     "StockpadV4Factory": {
-      "current": "0x309E552113553D99d05801C31230FBd67e50F570",
+      "current": "0x0C9720B8684C6E178d3cD7f73a5db21613e21C20",
+      "locker": "0x2EC332DF5694aD2D237B16A0f444C68866F2Ff49",
+      "swapper": "0xd9bD146d300BF03c05aC13d5FB2AC333D3A9D4b2",
       "legacy": [
+        "0x309E552113553D99d05801C31230FBd67e50F570",
         "0x3a97D922C3B9188Ae34A0D2913f7c7A37792f8f3",
         "0xBBB05533093D09730D1CC91f98f5d92a3B8c4406"
       ]
@@ -21,5 +25,5 @@
     "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
     "usdg": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"
   },
-  "notes": "The current product is StockpadV4Factory. USDG uses 6 decimals; WETH and stock tokens use 18. Liquidity is locked at launch. Addresses are on Robinhood Chain (4663)."
+  "notes": "The current product is StockpadV4Factory (buyback-and-burn reward mode + atomic dev buy + on-chain logo/website/X). Reward mode per launch: holders, creator, or buyback-and-burn (fees buy the coin from its own pool and send it to 0x…dEaD). USDG uses 6 decimals; WETH and stock tokens use 18. Liquidity is locked at launch. Addresses are on Robinhood Chain (4663)."
 }

@@ -125,6 +125,43 @@
       {
         "indexed": false,
         "internalType": "uint256",
+        "name": "pairSpent",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "tokensBoughtBurned",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "tokenFeesBurned",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "toProtocol",
+        "type": "uint256"
+      }
+    ],
+    "name": "FeesBurned",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
         "name": "pairFees",
         "type": "uint256"
       },
@@ -155,6 +192,19 @@
     ],
     "name": "FeesDistributed",
     "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "DEAD",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   },
   {
     "inputs": [],
@@ -359,6 +409,11 @@
         "internalType": "int24",
         "name": "tickUpper",
         "type": "int24"
+      },
+      {
+        "internalType": "bool",
+        "name": "burn",
+        "type": "bool"
       }
     ],
     "stateMutability": "view",
@@ -452,6 +507,11 @@
             "internalType": "int24",
             "name": "tickUpper",
             "type": "int24"
+          },
+          {
+            "internalType": "bool",
+            "name": "burn",
+            "type": "bool"
           }
         ],
         "internalType": "struct V4Locker.Pos",
